@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">SmartStreamer</string>
+    <string-array name="string_array_name">
+        <item>green</item>
+        <item>red</item>
+        <item>blue</item>
+    </string-array>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>
