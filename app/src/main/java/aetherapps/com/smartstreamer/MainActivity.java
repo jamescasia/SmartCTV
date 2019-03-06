@@ -6,7 +6,13 @@ import android.bluetooth.BluetoothSocket;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import aetherapps.com.smartstreamer.TFLiteObjectDetectionAPIModel;
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.icu.text.LocaleDisplayNames;
 import android.net.wifi.WifiManager;
 import android.nfc.tech.NfcV;
@@ -15,11 +21,13 @@ import android.os.ParcelUuid;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.telephony.TelephonyManager;
 import android.text.style.SubscriptSpan;
 import android.util.Log;
+import org.tensorflow.lite.Interpreter;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -62,9 +70,12 @@ import android.widget.Toast;
 
 import org.json.JSONObject;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -107,14 +118,60 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     FirebaseDatabase database;
     DatabaseReference myRef;
+    Button infer;
 
 
     private BluetoothAdapter myBt;
 
 
     private Publisher publisher;
+    private TFLiteObjectDetectionAPIModel predictor;
 
     private Subscriber subscriber;
+    Interpreter tflite;
+    private  MappedByteBuffer loadModelFile()
+            throws IOException {
+        AssetFileDescriptor fileDescriptor = this.getAssets().openFd("coco_ssd_mobilenet_v1_1.0_quant_2018_06_29");
+        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = inputStream.getChannel();
+        long startOffset = fileDescriptor.getStartOffset();
+        long declaredLength = fileDescriptor.getDeclaredLength();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+    }
+
+    public Bitmap getBitmapFromAsset( String filePath) {
+        AssetManager assetManager = this.getAssets();
+
+        InputStream istr;
+        Bitmap bitmap = null;
+        try {
+            istr = assetManager.open(filePath);
+            bitmap = BitmapFactory.decodeStream(istr);
+        } catch (IOException e) {
+            Toast.makeText(getApplicationContext(),"NOOO"+e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+        return bitmap;
+    }
+
+    private void infer(){
+        List<Classifier.Recognition> models = predictor.recognizeImage(getBitmapFromAsset(  "ohno.jpg"));
+        Toast.makeText(getApplicationContext(),models.get(0).getTitle() +" " + models.get(0).getConfidence() +" " + models.get(0).getId(), Toast.LENGTH_LONG).show();
+        for(int i = 0; i < models.size(); i++) {
+            System.out.println(models.get(i).getTitle() +" " + models.get(i).getConfidence() +" " + models.get(i).getId());
+        }
+
+
+//        tflite.run();
+    }
+    private void asd(){
+
+        try {
+            tflite = new Interpreter(loadModelFile( ));
+        }
+        catch(Exception e){
+            e.printStackTrace();
+        }
+    }
 
     private void disableButton() {
 
@@ -140,14 +197,31 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         return deviceUniqueIdentifier;
     }
 
+    protected void initObjectDetector(){
+
+//        protected Interpreter tflite;
+//        tflite = new Interpreter(loadModelFile(activity));
+    }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        predictor = new TFLiteObjectDetectionAPIModel();
 
 
         cnctBtn = findViewById(R.id.cnctBtn);
+        infer = findViewById(R.id.inferBtn);
+
+        infer.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                infer();
+            }
+        });
+
         database = FirebaseDatabase.getInstance();
         requestPermissions();
         cnctBtn.setOnClickListener(new View.OnClickListener() {
@@ -272,7 +346,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     @Override
     public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
-        initialize();
+//        initialize();
 
     }
 
@@ -280,16 +354,16 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     public void onPermissionsDenied(int requestCode, List<String> perms) {
 //        Log.d(  "onPermissionsDenied:" + requestCode + ":" + perms.size());
 
-//        if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
-//            new AppSettingsDialog.Builder(this)
-//                    .setTitle(getString(R.string.title_settings_dialog))
-//                    .setRationale(getString(R.string.rationale_ask_again))
-//                    .setPositiveButton("Settings")
-//                    .setNegativeButton("Cancel")
-//                    .setRequestCode(RC_SETTINGS)
-//                    .build()
-//                    .show();
-//        }
+        if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
+            new AppSettingsDialog.Builder(this)
+                    .setTitle(getString(R.string.title_settings_dialog))
+                    .setRationale(getString(R.string.rationale_ask_again))
+                    .setPositiveButton("Settings")
+                    .setNegativeButton("Cancel")
+                    .setRequestCode(RC_SETTINGS)
+                    .build()
+                    .show();
+        }
     }
 
     @Override
@@ -312,6 +386,10 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 //    }
 
     private void initialize() {
+
+
+        Bitmap bitmap = getBitmapFromAsset(  "allcp.png");
+        Toast.makeText(getApplicationContext(), bitmap.getHeight() +" "+ bitmap.getByteCount(), Toast.LENGTH_LONG).show();
 
 
 
@@ -343,7 +421,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         }
 
         myRef = database.getReference("users/userID/cameras/" + getDeviceIMEI() + "/action");
-        myRef.child("action").setValue(0);
+        myRef.setValue(0);
 //        write();
 
         myRef.addValueEventListener(new ValueEventListener() {
@@ -377,12 +455,37 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     @AfterPermissionGranted(RC_SETTINGS)
     private void requestPermissions() {
 
-        String[] perm = {Manifest.permission.CHANGE_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_WIFI_STATE, Manifest.permission.INTERNET, Manifest.permission.READ_PHONE_STATE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.BLUETOOTH_PRIVILEGED, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+        String[] perm = {Manifest.permission.READ_EXTERNAL_STORAGE,Manifest.permission.CHANGE_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_WIFI_STATE, Manifest.permission.INTERNET, Manifest.permission.READ_PHONE_STATE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.BLUETOOTH_PRIVILEGED, Manifest.permission.WRITE_EXTERNAL_STORAGE};
 
         if (EasyPermissions.hasPermissions(this, perm)) {
-            initialize();
+//            initialize();
 
         } else {
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                // Permission is not granted
+                // Should we show an explanation?
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                    // Show an explanation to the user *asynchronously* -- don't block
+                    // this thread waiting for the user's response! After the user
+                    // sees the explanation, try again to request the permission.
+                } else {
+                    // No explanation needed; request the permission
+                    ActivityCompat.requestPermissions(this,
+                            new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
+                             123);
+
+                    // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
+                    // app-defined int constant. The callback method gets the
+                    // result of the request.
+                }
+            } else {
+                initialize();
+                // Permission has already been granted
+            }
 
 
             Toast.makeText(getApplicationContext(), "rejected", Toast.LENGTH_SHORT).show();
