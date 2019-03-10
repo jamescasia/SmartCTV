@@ -47,7 +47,10 @@ dependencies {
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
     compile 'com.wonderkiln:camerakit:0.13.1'
-
+    compile "com.quickblox:quickblox-android-sdk-core:2.5.1@aar"
+    compile("com.quickblox:quickblox-android-sdk-chat:2.5.1@aar") {
+        transitive=true
+    }
 //    implementation 'io.fotoapparat:fotoapparat:2.7.0'
     compile 'org.tensorflow:tensorflow-lite:+'
     compile 'com.opentok.android:opentok-android-sdk:2.14.0'

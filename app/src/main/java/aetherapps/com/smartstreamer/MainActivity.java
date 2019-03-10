@@ -9,12 +9,10 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.content.res.AssetFileDescriptor;
-import android.content.res.AssetManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelUuid;
@@ -53,16 +51,10 @@ import com.wonderkiln.camerakit.CameraKitImage;
 import com.wonderkiln.camerakit.CameraKitVideo;
 import com.wonderkiln.camerakit.CameraView;
 
-import org.tensorflow.lite.Interpreter;
-
 import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -96,7 +88,6 @@ import pub.devrel.easypermissions.EasyPermissions;
 
 public class MainActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks, Session.SessionListener, PublisherKit.PublisherListener, BaseVideoCapturer.CaptureSwitch {
 
-    private static SimpleDateFormat sdf;
     private static String API_KEY = "46283042";
     private static String SESSION_ID = "1_MX40NjI4MzA0Mn5-MTU1MjAxOTA0Nzc3Nn4xN0EzN0ZueXd5S0UvS3J4OUNqTWRkOWx-fg";
     private static String TOKEN = "T1==cGFydG5lcl9pZD00NjI4MzA0MiZzaWc9MTBiMzdkMjdiODlhYzE2ZWMxNTgxZTQzNTBhNmZkN2QxMDMyYTkxNTpzZXNzaW9uX2lkPTFfTVg0ME5qSTRNekEwTW41LU1UVTFNakF4T1RBME56YzNObjR4TjBFek4wWnVlWGQ1UzBVdlMzSjRPVU5xVFdSa09XeC1mZyZjcmVhdGVfdGltZT0xNTUyMDE5MDcwJm5vbmNlPTAuODY0MTY0NDE0NTQzMTU5NyZyb2xlPXB1Ymxpc2hlciZleHBpcmVfdGltZT0xNTU0NjA3NDY5JmluaXRpYWxfbGF5b3V0X2NsYXNzX2xpc3Q9";
@@ -106,12 +97,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     Date when = new Date(System.currentTimeMillis());
 
 
-//    private static final String LABEL_PATH = "labels.txt";
-
-    //                private static final String LABEL_PATH = "labelmap.txt";
-//    private static final String MODEL_PATH = "mobilenet_quant_v1_224.tflite";
     private static final String MODEL_PATH = "detect.tflite";
-    //private static final String MODEL_PATH  = "mobilenet_v1_1.0_224/mobilenet_v1_1.0_224.tflite";
     private static final String LABEL_PATH = "coco_labels_list.txt";
     //
     private CameraView cameraView;
@@ -123,13 +109,11 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     Button cnctBtn;
     String IMEI;
     Boolean CONNECTED_TO_HC05 = false;
-
+    Button infer;
     FirebaseDatabase database;
     DatabaseReference myRef;
     DatabaseReference activeUsers;
     DatabaseReference detections;
-    //    Button infer;
-    //declarations
     String strgLink = "";
     private StorageReference storage;
     private BluetoothAdapter myBt;
@@ -139,7 +123,6 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     private Subscriber subscriber;
     private Boolean streamingOrNot = false;
-    Interpreter tflite;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,7 +135,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         cameraView.setVisibility(View.INVISIBLE);
         cnctBtn = findViewById(R.id.cnctBtn);
 //        infer = findViewById(R.id.inferBtn);
-
+//
 //        infer.setOnClickListener(new View.OnClickListener() {
 //            @Override
 //            public void onClick(View v) {
@@ -188,40 +171,6 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     }
 
-
-    private MappedByteBuffer loadModelFile()
-            throws IOException {
-
-        AssetFileDescriptor fileDescriptor = this.getAssets().openFd(MODEL_PATH);
-        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
-        FileChannel fileChannel = inputStream.getChannel();
-        long startOffset = fileDescriptor.getStartOffset();
-        long declaredLength = fileDescriptor.getDeclaredLength();
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
-    }
-
-    public Bitmap getBitmapFromAsset(String filePath) {
-        AssetManager assetManager = getAssets();
-
-        InputStream istr;
-        Bitmap bitmap = null;
-        try {
-            istr = assetManager.open(filePath);
-            bitmap = BitmapFactory.decodeStream(istr);
-        } catch (IOException e) {
-//            Toast.makeText(getApplicationContext(), "NOOO" + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-        return bitmap;
-    }
-
-    private void asd() {
-
-        try {
-            tflite = new Interpreter(loadModelFile());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     private void disableButton() {
 
@@ -354,7 +303,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     @Override
     public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
 //        initialize();
-        Toast.makeText(getApplicationContext(), "onPermissionGranted", Toast.LENGTH_SHORT).show();
+//        Toast.makeText(getApplicationContext(), "onPermissionGranted", Toast.LENGTH_SHORT).show();
 
     }
 
@@ -401,6 +350,8 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
 
         database = FirebaseDatabase.getInstance();
+
+
 //        Toast.makeText(getApplicationContext(), "dafaf", Toast.LENGTH_SHORT).show();
 
 
@@ -457,64 +408,6 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             }
         });
 
-        cameraView.addCameraKitListener(new CameraKitEventListener() {
-//            public void o/**/
-
-            @Override
-            public void onEvent(CameraKitEvent cameraKitEvent) {
-
-            }
-
-            @Override
-            public void onError(CameraKitError cameraKitError) {
-
-            }
-
-            @Override
-            public void onImage(CameraKitImage cameraKitImage) {
-
-
-                Bitmap bitmap = cameraKitImage.getBitmap();
-
-
-                bitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, false);
-
-//                imageViewResult.setImageBitmap(bitmap);
-
-                final List<Classifier.Recognition> results = classifier.recognizeImage(bitmap);
-                Toast.makeText(getApplicationContext(),   results.get(0).getTitle(), Toast.LENGTH_LONG).show();
-
-                database = FirebaseDatabase.getInstance();
-                detections = database.getReference("users/userID/Images");
-//                for(Classifier.Recognition r: results){
-
-                if (results.get(0).getTitle().equals("person") && results.get(0).getConfidence() >= 0.5f) {
-                    String pushKey = detections.push().getKey();
-                    String url = uploadFile(bitmap, pushKey);
-//                        detections.child(pushKey).setValue("Person Detected on " + new Date().toString()+   " by camera" +IMEI);
-                    if (url != "") {
-                        detections.child(pushKey).setValue(new DetectedImage(new Date().toString(), url, IMEI));
-//                        cameraView.captureVideo();
-                    }
-
-
-                }
-//                }
-
-
-//                textViewResult.setText(results.toString());
-
-            }
-
-            @Override
-            public void onVideo(CameraKitVideo cameraKitVideo) {
-
-
-//                cameraKitVideo.get
-
-            }
-        });
-
 
         storage = FirebaseStorage.getInstance().getReference();
 
@@ -529,15 +422,17 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 if (Integer.parseInt(dataSnapshot.getValue().toString()) <= 0) {
 
-                    startDetecting();
                     if (streamingOrNot) {
                         stopStreaming();
                     }
-                } else if(Integer.parseInt(dataSnapshot.getValue().toString()) >=1){
+
+                    startDetecting();
+                } else if (Integer.parseInt(dataSnapshot.getValue().toString()) >= 1) {
+
+                    stopDetecting();
                     if (!streamingOrNot) {
                         startStreaming();
                     }
-                    stopDetecting();
                 }
 
             }
@@ -610,35 +505,63 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 //                });
 //    }
 
-    private void processImage(Bitmap bitmap) {
-//        Bitmap bitmap = cameraKitImage.getBitmap();
-
-        bitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, false);
-
-//                imageViewResult.setImageBitmap(bitmap);
-
-        final List<Classifier.Recognition> results = classifier.recognizeImage(bitmap);
-        Toast.makeText(getApplicationContext(), "a" + results.toString(), Toast.LENGTH_LONG).show();
-
-        database = FirebaseDatabase.getInstance();
-        detections = database.getReference("users/userID/cameras/" + getDeviceIMEI() + "/Detections");
-        String pushKey = detections.push().getKey();
-        detections.child(pushKey).setValue(results.get(0).getTitle() + "");
-
-
-    }
 
     private void startDetecting() {
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+//            Toast.makeText(getApplicationContext(), "Permissions Granted", Toast.LENGTH_SHORT).show();
 
-//        cameraView.start();
+                cameraView.start();
+            } else {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1234);
+            }
+        }
+
+        cameraView.addCameraKitListener(new CameraKitEventListener() {
+//            public void o/**/
+
+            @Override
+            public void onEvent(CameraKitEvent cameraKitEvent) {
+
+            }
+
+            @Override
+            public void onError(CameraKitError cameraKitError) {
+
+            }
+
+            @Override
+            public void onImage(CameraKitImage cameraKitImage) {
+//                Toast.makeText(getApplicationContext(), "Image!", Toast.LENGTH_SHORT).show();
+                Bitmap bitmap = cameraKitImage.getBitmap();
+                bitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, false);
+                processImage(bitmap);
+
+
+//                }
+
+//cameraView.captureImage();
+
+            }
+
+            @Override
+            public void onVideo(CameraKitVideo cameraKitVideo) {
+
+
+
+//                cameraKitVideo.get
+
+            }
+        });
+
+//cameraView.captureImage();
         Toast.makeText(getApplicationContext(), "DETECTING", Toast.LENGTH_SHORT).show();
         final Handler handler = new Handler();
         final int delay = 1500; //milliseconds
 
         handler.postDelayed(new Runnable() {
-
-
             public void run() {
+
 //                cameraView.captureImage();
                 takeImage();
                 handler.postDelayed(this, delay);
@@ -646,25 +569,50 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         }, delay);
 
     }
+    private void capturePersonVideo(){
+
+        cameraView.captureVideo();
+
+
+    }
+
+    private void processImage(Bitmap bitmap) {
+        database = FirebaseDatabase.getInstance();
+        detections = database.getReference("users/userID/Images");
+
+        final List<Classifier.Recognition> results = classifier.recognizeImage(bitmap);
+        Toast.makeText(getApplicationContext(), results.get(0).getTitle(), Toast.LENGTH_LONG).show();
+        Boolean hasPerson = false;
+
+        for (Classifier.Recognition r : results) {
+            if (r.getTitle().equals("person") && r.getConfidence() >= 0.5f) {
+                hasPerson = true;
+                break;
+            }
+
+        }
+        if (hasPerson) {
+            String pushKey = detections.push().getKey();
+            String url = uploadFile(bitmap, pushKey);
+            if (!url.equals("")) {
+                detections.child(pushKey).setValue(new DetectedImage(new Date().toString(), url, IMEI));
+            }
+
+        }
+
+
+    }
 
     private void takeImage() {
-        Toast.makeText(this, "taking", Toast.LENGTH_SHORT).show();
+//        Toast.makeText(this, cameraView.isStarted()+"", Toast.LENGTH_SHORT).show();
 
-//        try {
-            cameraView.captureImage();
-//        } catch (Exception e) {
-//            System.out.print(">>>>>>>>>>>>>>>>>>>>");
-//            e.printStackTrace();
-//
-//
-//        }
+        cameraView.captureImage();
     }
 
     private void stopStreaming() {
         streamingOrNot = false;
         session.disconnect();
-//        publisher.
-//        publisher.destroy();
+        publisher.destroy();
 
     }
 
@@ -699,7 +647,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     @AfterPermissionGranted(RC_SETTINGS)
     private void requestPermissions() {
 
-        String[] perm = {Manifest.permission.CHANGE_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_WIFI_STATE, Manifest.permission.INTERNET, Manifest.permission.READ_PHONE_STATE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.BLUETOOTH_PRIVILEGED, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+        String[] perm = {Manifest.permission.CHANGE_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_WIFI_STATE, Manifest.permission.INTERNET, Manifest.permission.READ_PHONE_STATE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN};
 
         if (EasyPermissions.hasPermissions(this, perm)) {
             Toast.makeText(getApplicationContext(), "(EasyPermissions.hasPermissions(this, perm))", Toast.LENGTH_SHORT).show();
@@ -775,8 +723,6 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         if (subscriber == null) {
             subscriber = new Subscriber.Builder(this, stream).build();
             session.subscribe(subscriber);
-
-//            SubscriberContainer.addView(subscriber.getView());
 
 
         }
@@ -885,7 +831,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     @Override
     protected void onResume() {
         super.onResume();
-        cameraView.start();
+//        cameraView.start();
 //        cameraView.stop();
 
     }
