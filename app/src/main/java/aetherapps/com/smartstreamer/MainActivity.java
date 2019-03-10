@@ -52,6 +52,9 @@ import com.wonderkiln.camerakit.CameraKitVideo;
 import com.wonderkiln.camerakit.CameraView;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -102,6 +105,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     //
     private CameraView cameraView;
     private Classifier classifier;
+    private Boolean capturingPersonVideo = false;
     Boolean inited = false;
     private Executor executor = Executors.newSingleThreadExecutor();
     public static final int RC_SETTINGS = 123;
@@ -114,7 +118,10 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     DatabaseReference myRef;
     DatabaseReference activeUsers;
     DatabaseReference detections;
+
+    DatabaseReference videoDetections;
     String strgLink = "";
+    private String vidLink = "";
     private StorageReference storage;
     private BluetoothAdapter myBt;
 
@@ -451,11 +458,54 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         cameraView.stop();
     }
 
+    private String uploadVideo(File video, String pushKey) {
+        String link;
 
-    private String uploadFile(Bitmap bitmap, String pushKey) {
         FirebaseStorage storage = FirebaseStorage.getInstance();
         final StorageReference storageRef = storage.getReferenceFromUrl("gs://smart-streamer.appspot.com");
-        final StorageReference currentPicRef = storageRef.child("userID/" + pushKey + ".jpg");
+        final StorageReference currentVidRef = storageRef.child("userID/videos/" + pushKey + ".mp4");
+//        StorageMetadata metadata = new StorageMetadata.Builder()
+//                .setContentType("video/mp4")
+//                .build();
+        InputStream stream = null;
+        try {
+            stream = new FileInputStream(video);
+        } catch (FileNotFoundException e) {
+
+            Toast.makeText(getApplicationContext(), "Failed to Upload", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
+        UploadTask uploadTask = currentVidRef.putStream(stream);
+        uploadTask.addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+
+                Toast.makeText(getApplicationContext(), "Failed to Upload", Toast.LENGTH_SHORT).show();
+                // Handle unsuccessful uploads
+            }
+        }).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+            @Override
+            public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                currentVidRef.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                    @Override
+                    public void onSuccess(Uri uri) {
+                        vidLink = uri.toString();
+
+                        Toast.makeText(getApplicationContext(), "Succeeded to Upload", Toast.LENGTH_SHORT).show();
+                        //Do what you want with the url
+                    }
+                });
+            }
+        });
+        return vidLink;
+
+    }
+
+
+    private String uploadPic(Bitmap bitmap, String pushKey) {
+        FirebaseStorage storage = FirebaseStorage.getInstance();
+        final StorageReference storageRef = storage.getReferenceFromUrl("gs://smart-streamer.appspot.com");
+        final StorageReference currentPicRef = storageRef.child("userID/images/" + pushKey + ".jpg");
 //        final StoragepicRef = storageRef.child("userID/" + pushKey + ".jpg");
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.JPEG, 20, baos);
@@ -508,15 +558,18 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     private void startDetecting() {
         if (Build.VERSION.SDK_INT >= 23) {
-            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
 //            Toast.makeText(getApplicationContext(), "Permissions Granted", Toast.LENGTH_SHORT).show();
 
                 cameraView.start();
             } else {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1234);
             }
+        } else {
+            cameraView.start();
         }
 
+        cameraView.setPinchToZoom(false);
         cameraView.addCameraKitListener(new CameraKitEventListener() {
 //            public void o/**/
 
@@ -525,8 +578,10 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
             }
 
+
             @Override
             public void onError(CameraKitError cameraKitError) {
+                Toast.makeText(getApplicationContext(), "CameraKit Error", Toast.LENGTH_SHORT).show();
 
             }
 
@@ -536,22 +591,16 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
                 Bitmap bitmap = cameraKitImage.getBitmap();
                 bitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, false);
                 processImage(bitmap);
-
-
-//                }
-
-//cameraView.captureImage();
-
             }
 
             @Override
             public void onVideo(CameraKitVideo cameraKitVideo) {
-
-
-
-//                cameraKitVideo.get
+                Toast.makeText(getApplicationContext(), "Stopped Person Video", Toast.LENGTH_SHORT).show();
+                processVideo(cameraKitVideo.getVideoFile());
 
             }
+
+
         });
 
 //cameraView.captureImage();
@@ -569,9 +618,39 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         }, delay);
 
     }
-    private void capturePersonVideo(){
+
+    private void processVideo(File cv) {
+        database = FirebaseDatabase.getInstance();
+        videoDetections = database.getReference("users/userID/Videos");
+
+        String pushKey = videoDetections.push().getKey();
+        String url = uploadVideo(cv, pushKey);
+        if (url.equals("")) {
+            Toast.makeText(this, "url is nil", Toast.LENGTH_SHORT).show();
+        }
+        videoDetections.child(pushKey).setValue(new DetectedImage(new Date().toString(), url, IMEI));
+
+
+    }
+
+
+    private void capturePersonVideo() {
+        Toast.makeText(getApplicationContext(), "Capturing Person Video", Toast.LENGTH_SHORT).show();
+        capturingPersonVideo = true;
 
         cameraView.captureVideo();
+//        cameraView.captureVideo(CameraKitEventCallback);
+////        File videoFile= new Fi;
+//        cameraView.captureVideo(new CameraKitEventListener. );
+
+//        final Handler handler = new Handler();
+//        handler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                cameraView.stopVideo();
+//                //Do something after 100ms
+//            }
+//        }, 3000);
 
 
     }
@@ -581,22 +660,33 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         detections = database.getReference("users/userID/Images");
 
         final List<Classifier.Recognition> results = classifier.recognizeImage(bitmap);
-        Toast.makeText(getApplicationContext(), results.get(0).getTitle(), Toast.LENGTH_LONG).show();
+//        Toast.makeText(getApplicationContext(), results.get(0).getTitle(), Toast.LENGTH_LONG).show();
         Boolean hasPerson = false;
 
         for (Classifier.Recognition r : results) {
-            if (r.getTitle().equals("person") && r.getConfidence() >= 0.5f) {
+            if (r.getTitle().equals("person") && r.getConfidence() >= 0.6f) {
                 hasPerson = true;
                 break;
             }
 
         }
         if (hasPerson) {
+            if (!capturingPersonVideo) {
+                capturePersonVideo();
+            }
             String pushKey = detections.push().getKey();
-            String url = uploadFile(bitmap, pushKey);
+            String url = uploadPic(bitmap, pushKey);
             if (!url.equals("")) {
                 detections.child(pushKey).setValue(new DetectedImage(new Date().toString(), url, IMEI));
             }
+
+        } else {
+            if (capturingPersonVideo) {
+                cameraView.stopVideo();
+                capturingPersonVideo = false;
+
+            }
+
 
         }
 
@@ -647,7 +737,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     @AfterPermissionGranted(RC_SETTINGS)
     private void requestPermissions() {
 
-        String[] perm = {Manifest.permission.CHANGE_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_WIFI_STATE, Manifest.permission.INTERNET, Manifest.permission.READ_PHONE_STATE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN};
+        String[] perm = {Manifest.permission.CHANGE_NETWORK_STATE, Manifest.permission.CAPTURE_VIDEO_OUTPUT, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_WIFI_STATE, Manifest.permission.INTERNET, Manifest.permission.READ_PHONE_STATE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO, Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN};
 
         if (EasyPermissions.hasPermissions(this, perm)) {
             Toast.makeText(getApplicationContext(), "(EasyPermissions.hasPermissions(this, perm))", Toast.LENGTH_SHORT).show();
